@@ -38,7 +38,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, "healthcheck:", err)
 		os.Exit(1)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		fmt.Fprintln(os.Stderr, "healthcheck: status", resp.StatusCode)

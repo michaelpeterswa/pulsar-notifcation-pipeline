@@ -86,4 +86,6 @@ type PushProvider interface {
 type NotImplementedError struct{ Target string }
 
 // Error implements error.
-func (e *NotImplementedError) Error() string { return "provider: no implementation for target " + e.Target }
+func (e *NotImplementedError) Error() string {
+	return "provider: no implementation for target " + e.Target
+}

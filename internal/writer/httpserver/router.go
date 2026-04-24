@@ -27,6 +27,7 @@ func RequestIDFromContext(ctx context.Context) string {
 // ServerOption is the functional option for NewServer.
 type ServerOption func(*Server)
 
+// Server is the writer's HTTP server.
 type Server struct {
 	handler       *Handlers
 	authenticator auth.Authenticator

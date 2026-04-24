@@ -52,7 +52,7 @@ func NewBearer(opts ...BearerOption) (*Bearer, error) {
 	if err != nil {
 		return nil, fmt.Errorf("auth: open tokens file: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	out := map[string]Principal{}
 	s := bufio.NewScanner(f)

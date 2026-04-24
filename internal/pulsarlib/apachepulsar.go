@@ -159,7 +159,7 @@ func (c *apacheConsumer) Receive(ctx context.Context) (*ConsumedMessage, error) 
 	out := &ConsumedMessage{
 		Body:           msg.Payload(),
 		NotificationID: msg.Properties()[NotificationIDProperty],
-		Ack:            func() { c.consumer.Ack(msg) },
+		Ack:            func() { _ = c.consumer.Ack(msg) },
 		Nack:           func() { c.consumer.Nack(msg) },
 	}
 	return out, nil

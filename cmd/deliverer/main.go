@@ -164,4 +164,3 @@ func buildProvider(cfg *config.Config) (provider.PushProvider, error) {
 		return nil, errors.New("deliverer: unknown provider " + string(cfg.Provider))
 	}
 }
-

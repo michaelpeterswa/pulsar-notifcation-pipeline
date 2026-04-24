@@ -110,7 +110,7 @@ func (p *Provider) Push(ctx context.Context, n *notificationpbv1.Notification) (
 	if err != nil {
 		return nil, &provider.TransientError{Err: fmt.Errorf("pushover: http do: %w", err)}
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	bodyBytes, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
 	snippet := truncate(string(bodyBytes), 512)
 

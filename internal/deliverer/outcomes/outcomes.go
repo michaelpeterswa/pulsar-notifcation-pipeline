@@ -12,10 +12,11 @@ import (
 // recorded when processing reaches a final state.
 type Status string
 
+// StatusDelivered, StatusPermanentlyFailed, and StatusExpired are the terminal outcome statuses.
 const (
-	StatusDelivered          Status = "delivered"
-	StatusPermanentlyFailed  Status = "permanently-failed"
-	StatusExpired            Status = "expired"
+	StatusDelivered         Status = "delivered"
+	StatusPermanentlyFailed Status = "permanently-failed"
+	StatusExpired           Status = "expired"
 )
 
 // Reason codes from data-model.md §5.

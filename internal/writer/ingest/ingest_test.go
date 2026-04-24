@@ -97,9 +97,9 @@ func TestAcceptPropagatesPublishError(t *testing.T) {
 
 func TestValidateSurfaceCatalogue(t *testing.T) {
 	cases := []struct {
-		name    string
-		mutate  func(*notificationpbv1.Notification)
-		expect  string // expected field error "field:code"
+		name   string
+		mutate func(*notificationpbv1.Notification)
+		expect string // expected field error "field:code"
 	}{
 		{"missing-title", func(n *notificationpbv1.Notification) { n.Content.Title = "" }, "content.title:required"},
 		{"title-too-long", func(n *notificationpbv1.Notification) {

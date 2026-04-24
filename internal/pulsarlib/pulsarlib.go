@@ -17,7 +17,6 @@ import (
 	"github.com/apache/pulsar-client-go/pulsar/crypto"
 )
 
-
 // NotificationIDProperty is the Pulsar message property that carries the
 // pipeline-assigned notification identifier as plaintext, per FR-015. This
 // value is the ONLY field that leaves the encryption envelope.
@@ -147,12 +146,12 @@ func defaultOptions() options {
 // Applied configuration accessors — used by both the Apache Pulsar
 // implementation and by test fakes.
 func (o options) ServiceURL() string                    { return o.serviceURL }
-func (o options) Topic() string                          { return o.topic }
-func (o options) Subscription() string                   { return o.subscription }
+func (o options) Topic() string                         { return o.topic }
+func (o options) Subscription() string                  { return o.subscription }
 func (o options) EncryptionKeyReader() crypto.KeyReader { return o.encryptionKeyReader }
-func (o options) EncryptionKeyNames() []string           { return o.encryptionKeyNames }
-func (o options) FailOnCryptoError() bool                { return o.failOnCryptoError }
-func (o options) Logger() *slog.Logger                   { return o.logger }
+func (o options) EncryptionKeyNames() []string          { return o.encryptionKeyNames }
+func (o options) FailOnCryptoError() bool               { return o.failOnCryptoError }
+func (o options) Logger() *slog.Logger                  { return o.logger }
 
 // Apply reduces a slice of options into an options value starting from the
 // package defaults. Exposed for the implementation packages and for test

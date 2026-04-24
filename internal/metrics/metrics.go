@@ -25,29 +25,32 @@ const MeterName = "github.com/michaelpeterswa/pulsar-notifcation-pipeline"
 
 // --- Metric names -----------------------------------------------------------
 
+// NameWriterSubmissions and related constants are OTel instrument names for writer metrics.
 const (
-	// Writer
-	NameWriterSubmissions  = "pulsarnp.writer.submissions"         // counter
-	NameWriterSubmitDur    = "pulsarnp.writer.submit.duration"     // histogram, seconds
-	NameWriterPublishDur   = "pulsarnp.writer.publish.duration"    // histogram, seconds
+	NameWriterSubmissions = "pulsarnp.writer.submissions"      // counter
+	NameWriterSubmitDur   = "pulsarnp.writer.submit.duration"  // histogram, seconds
+	NameWriterPublishDur  = "pulsarnp.writer.publish.duration" // histogram, seconds
+)
 
-	// Deliverer
-	NameDelivererConsumed      = "pulsarnp.deliverer.consumed"           // counter
-	NameDelivererOutcomes      = "pulsarnp.deliverer.outcomes"           // counter
-	NameDelivererProviderDur   = "pulsarnp.deliverer.provider.duration"  // histogram, seconds
-	NameDelivererAttempts      = "pulsarnp.deliverer.attempts"           // histogram, integer
-	NameDelivererDecryptFailed = "pulsarnp.deliverer.decrypt_failures"   // counter (FR-016 alert target)
+// NameDelivererConsumed and related constants are OTel instrument names for deliverer metrics.
+const (
+	NameDelivererConsumed      = "pulsarnp.deliverer.consumed"          // counter
+	NameDelivererOutcomes      = "pulsarnp.deliverer.outcomes"          // counter
+	NameDelivererProviderDur   = "pulsarnp.deliverer.provider.duration" // histogram, seconds
+	NameDelivererAttempts      = "pulsarnp.deliverer.attempts"          // histogram, integer
+	NameDelivererDecryptFailed = "pulsarnp.deliverer.decrypt_failures"  // counter (FR-016 alert target)
 )
 
 // --- Attribute keys ---------------------------------------------------------
 
+// AttrOutcome and related constants are OTel attribute keys used by pipeline instruments.
 const (
-	AttrOutcome     = attribute.Key("outcome")          // accepted, validation_failed, auth_failed, substrate_unavailable, internal
-	AttrService     = attribute.Key("service_name")     // originating upstream service (from bearer token)
-	AttrStatus      = attribute.Key("status")           // delivered | permanently-failed | expired
-	AttrReason      = attribute.Key("reason")           // reason code from data-model.md §5
-	AttrProvider    = attribute.Key("provider")         // pushover | sandbox | ...
-	AttrResultClass = attribute.Key("result_class")     // success | transient | permanent
+	AttrOutcome     = attribute.Key("outcome")      // accepted, validation_failed, auth_failed, substrate_unavailable, internal
+	AttrService     = attribute.Key("service_name") // originating upstream service (from bearer token)
+	AttrStatus      = attribute.Key("status")       // delivered | permanently-failed | expired
+	AttrReason      = attribute.Key("reason")       // reason code from data-model.md §5
+	AttrProvider    = attribute.Key("provider")     // pushover | sandbox | ...
+	AttrResultClass = attribute.Key("result_class") // success | transient | permanent
 )
 
 // Outcome label values for the writer submissions counter.
@@ -71,9 +74,9 @@ const (
 var (
 	initOnce sync.Once
 
-	writerSubmissions  metric.Int64Counter
-	writerSubmitDur    metric.Float64Histogram
-	writerPublishDur   metric.Float64Histogram
+	writerSubmissions metric.Int64Counter
+	writerSubmitDur   metric.Float64Histogram
+	writerPublishDur  metric.Float64Histogram
 
 	delivererConsumed      metric.Int64Counter
 	delivererOutcomes      metric.Int64Counter

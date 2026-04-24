@@ -20,10 +20,10 @@ import (
 )
 
 const (
-	contentTypeJSON     = "application/json"
-	contentTypeProtobuf = "application/x-protobuf"
+	contentTypeJSON        = "application/json"
+	contentTypeProtobuf    = "application/x-protobuf"
 	contentTypeProtobufAlt = "application/protobuf"
-	maxRequestBodyBytes = 1 << 20 // 1 MiB
+	maxRequestBodyBytes    = 1 << 20 // 1 MiB
 )
 
 // Handlers implements the generated ServerInterface. Constructed via
