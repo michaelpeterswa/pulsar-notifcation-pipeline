@@ -1,6 +1,6 @@
 # ── Stage 1: build ──────────────────────────────────────────────────────────
-# Dependencies are vendored before the Docker build (`just vendor`) so the
-# builder has no outbound network access requirements.
+# Dependencies are vendored by CI (`go mod vendor`) before invoking the Docker
+# build, so the builder stage has no outbound network access requirements.
 FROM golang:1.25 AS builder
 
 ARG TARGETARCH
