@@ -1,0 +1,65 @@
+// Grafana Alloy configuration for the pulsar-notifcation-pipeline local stack.
+//
+// Pattern mirrors
+// https://github.com/michaelpeterswa/yt-playlist-ripper/blob/9d3f71e752ab16ec016aaebfbb8efe141c8b94bf/docker/alloy/config.alloy
+//
+// Responsibilities:
+//   1. Discover every container in the compose network via the Docker socket.
+//   2. Relabel each target so the compose service name becomes `service`.
+//   3. Scrape Prometheus metrics from discovered containers and remote-write
+//      to Mimir (http://lgtm:9090).
+//   4. Tail stdout/stderr of every discovered container and forward to Loki
+//      (http://lgtm:3100).
+//
+// Note on metric routing:
+//   - The writer + deliverer use alpineworks.io/ootel with LOCAL=true, which
+//     pushes metrics via OTLP gRPC directly to lgtm:4317. Those metrics are
+//     already in Mimir without Alloy's help — Alloy's scrape below is
+//     complementary (covers LGTM self-metrics and anything else that exposes
+//     /metrics by default), not the primary app-metric path.
+
+livedebugging {
+	enabled = true
+}
+
+// --- Docker service discovery ----------------------------------------------
+
+discovery.docker "local" {
+	host = "unix:///var/run/docker.sock"
+}
+
+discovery.relabel "local" {
+	targets = discovery.docker.local.targets
+
+	rule {
+		source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+		target_label  = "service"
+	}
+}
+
+// --- Metrics: Prometheus scrape → Mimir remote-write -----------------------
+
+prometheus.scrape "default" {
+	targets    = discovery.relabel.local.output
+	forward_to = [prometheus.remote_write.default.receiver]
+}
+
+prometheus.remote_write "default" {
+	endpoint {
+		url = "http://lgtm:9090/api/v1/write"
+	}
+}
+
+// --- Logs: Docker → Loki ---------------------------------------------------
+
+loki.source.docker "default" {
+	host       = "unix:///var/run/docker.sock"
+	targets    = discovery.relabel.local.output
+	forward_to = [loki.write.local.receiver]
+}
+
+loki.write "local" {
+	endpoint {
+		url = "http://lgtm:3100/loki/api/v1/push"
+	}
+}

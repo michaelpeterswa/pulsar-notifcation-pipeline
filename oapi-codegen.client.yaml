@@ -1,0 +1,10 @@
+# oapi-codegen configuration for the public Go HTTP client library.
+# Output lands in pkg/notificationclient/generated/ and is wrapped by the
+# hand-written `pkg/notificationclient/{client,response,errors}.go`.
+
+package: generated
+output: pkg/notificationclient/generated/client.gen.go
+
+generate:
+  client: true
+  models: true

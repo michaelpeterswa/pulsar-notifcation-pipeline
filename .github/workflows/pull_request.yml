@@ -64,15 +64,87 @@ jobs:
         os: [ubuntu-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - name: Install Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: ${{ matrix.go-version }}
-
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go-version }}
+
+      - uses: taiki-e/install-action@just
+
       - name: Test
-        run: go test ./...
+        run: just test
+
+  test-integration:
+    strategy:
+      matrix:
+        go-version: [1.25.x]
+        os: [ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go-version }}
+
+      - uses: taiki-e/install-action@just
+
+      - name: Integration tests
+        run: just test-integration
+
+  funcoptslint:
+    strategy:
+      matrix:
+        go-version: [1.25.x]
+        os: [ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go-version }}
+
+      - uses: taiki-e/install-action@just
+
+      - name: Run funcoptslint (Constitution Principle II)
+        run: just funcoptslint
+
+  generate-drift:
+    strategy:
+      matrix:
+        go-version: [1.25.x]
+        os: [ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go-version }}
+
+      - uses: taiki-e/install-action@just
+
+      - name: Install protoc
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y protobuf-compiler
+
+      - name: Regenerate contracts
+        run: just generate
+
+      - name: Ensure no uncommitted diff
+        run: |
+          if ! git diff --exit-code; then
+            echo "::error::just generate produced uncommitted changes. Run just generate locally and commit."
+            exit 1
+          fi
