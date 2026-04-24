@@ -1,0 +1,89 @@
+// Canonical notification message schema for the pulsar-notifcation-pipeline.
+//
+// This file is the SINGLE SOURCE OF TRUTH for the wire contract carried through Apache
+// Pulsar and for the proto3-canonical-JSON representation accepted by the writer's HTTP
+// API. See specs/001-notification-pipeline/data-model.md for field-level rules.
+//
+// Forward/backward wire compatibility within a major version is mandatory (FR-013).
+// Adding a new push provider = adding a new sibling message + a new `target` oneof arm
+// with a new, never-reused field number. See research.md §2.
+
+syntax = "proto3";
+
+package notification.v1;
+
+option go_package = "github.com/michaelpeterswa/pulsar-notifcation-pipeline/pkg/notificationpb/v1;notificationpbv1";
+
+import "google/protobuf/timestamp.proto";
+
+// Notification is the canonical pipeline message. The writer assigns the
+// server-controlled fields (notification_id, created_at, originating_service) and
+// rejects requests where a caller sets them.
+message Notification {
+  // Server-assigned UUIDv7. Stable identifier across the pipeline.
+  string notification_id = 1;
+
+  // Server-assigned moment of writer acceptance.
+  google.protobuf.Timestamp created_at = 2;
+
+  // Caller-supplied expiry. If set and in the past at consume time, the message is
+  // dropped with terminal status `expired`.
+  google.protobuf.Timestamp expires_at = 3;
+
+  // Server-assigned; derived from the authenticated caller's bearer token.
+  string originating_service = 4;
+
+  // Caller-supplied idempotency key (optional). When repeated within the writer's
+  // idempotency window with the same payload, dispatch is de-duplicated.
+  string idempotency_key = 5;
+
+  // Common, provider-agnostic payload.
+  Content content = 10;
+
+  // Per-provider addressing and options. Exactly one arm must be set. Adding a new
+  // arm is the normal way to add a new push provider.
+  oneof target {
+    PushoverTarget pushover = 100;
+    // Reserved ranges for future providers. DO NOT REUSE.
+    // ApnsTarget   apns   = 101;
+    // FcmTarget    fcm    = 102;
+    // WebPushTarget webpush = 103;
+  }
+}
+
+// Content is the provider-agnostic, user-visible payload.
+message Content {
+  // 1..250 UTF-8 characters. No leading/trailing whitespace.
+  string title = 1;
+
+  // 1..1024 UTF-8 characters.
+  string body = 2;
+
+  // [-2, 2]. 0 = normal. Providers map down to their native ranges.
+  int32 priority = 3;
+
+  // Caller-supplied key/value metadata forwarded to the client (for deep linking, etc.).
+  // <= 32 entries; keys match [A-Za-z_][A-Za-z0-9_]* and are <= 64 chars; values <= 512.
+  map<string, string> data = 4;
+}
+
+// PushoverTarget carries Pushover-specific addressing and optional per-message
+// delivery hints. The Pushover application API token (sender credential) is NOT a
+// per-message field — it is deliverer-level config loaded from the environment.
+message PushoverTarget {
+  // Pushover user or group key. 30 alphanumeric characters. REQUIRED.
+  string user_or_group_key = 1;
+
+  // Specific device name. 1..25 chars; [A-Za-z0-9_-]+. Empty = all of the recipient's
+  // devices.
+  string device_name = 2;
+
+  // Pushover sound identifier. <= 25 chars. Empty = Pushover default.
+  string sound = 3;
+
+  // Supplementary URL shown with the message. Valid absolute URL, <= 512 chars.
+  string url = 4;
+
+  // Text for `url`. <= 100 chars. If set, `url` MUST also be set.
+  string url_title = 5;
+}

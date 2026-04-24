@@ -1,0 +1,74 @@
+# golangci-lint configuration for pulsar-notifcation-pipeline.
+# Principle V: env-based config and slog-only logging (see forbidigo rules).
+
+version: "2"
+
+run:
+  timeout: 5m
+  tests: true
+
+linters:
+  default: none
+  enable:
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - revive
+    - forbidigo
+    - misspell
+    - unconvert
+  settings:
+    forbidigo:
+      forbid:
+        - pattern: ^fmt\.Print(ln|f)?$
+          msg: use log/slog instead of fmt.Print* (Constitution Principle V)
+        - pattern: >-
+            ^log\.(Print|Printf|Println|Fatal|Fatalf|Fatalln|Panic|Panicf|Panicln)$
+          msg: use log/slog (Constitution Principle V)
+        - pattern: ^os\.Getenv$
+          msg: >-
+            env vars must be parsed via caarlos0/env in the config package
+            (Constitution Principle V)
+      analyze-types: false
+      exclude-godoc-examples: true
+    revive:
+      rules:
+        - name: exported
+          disabled: false
+  exclusions:
+    generated: lax
+    rules:
+      - path: _test\.go
+        linters:
+          - forbidigo
+      - path: tools/
+        linters:
+          - forbidigo
+      - path: ^cmd/
+        linters:
+          - forbidigo
+        text: "log/slog"
+      - path: \.gen\.go$
+        linters:
+          - errcheck
+          - govet
+          - revive
+          - staticcheck
+      - path: \.pb\.go$
+        linters:
+          - errcheck
+          - govet
+          - revive
+          - staticcheck
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+
+# Generated and tool files are excluded from lint noise.
+formatters:
+  enable:
+    - gofmt
+    - goimports

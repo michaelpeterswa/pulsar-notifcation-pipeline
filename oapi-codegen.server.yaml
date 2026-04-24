@@ -1,0 +1,11 @@
+# oapi-codegen configuration for the writer's HTTP server stubs.
+# Invoked by `just openapi-server` (or `just generate` / `just openapi`).
+
+package: httpserver
+output: internal/writer/httpserver/server.gen.go
+
+generate:
+  gorilla-server: true
+  strict-server: true
+  models: true
+  embedded-spec: true

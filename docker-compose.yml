@@ -1,40 +1,186 @@
 ---
-services:
-  main:
-    build: .
-    ports:
-      - "8081:8081"
-    environment:
-      # logging
-      LOG_LEVEL: "info"
+# Local development stack. NOT a production topology — this is a single-replica,
+# single-host compose that lets `just up` produce a working end-to-end pipeline
+# on a developer laptop. See specs/001-notification-pipeline/plan.md and
+# docs/key-rotation.md for the production-vs-dev gap analysis.
+#
+# Prereqs (run `just dev-secrets` once before the first `just up`):
+#   .secrets/pulsar-keys/v1.pub.pem
+#   .secrets/pulsar-keys/v1.priv.pem
+#   .secrets/writer-tokens
 
-      # metrics
+services:
+  pulsar:
+    image: apachepulsar/pulsar:3.3.2
+    command: bin/pulsar standalone -nss -nfw
+    ports:
+      - "6650:6650" # Pulsar binary protocol
+      - "8090:8080" # Pulsar admin HTTP (remapped to avoid writer :8080)
+    volumes:
+      - pulsar-data:/pulsar/data
+      - pulsar-conf:/pulsar/conf
+    environment:
+      # Keep heap well below the container memory limit so the JVM has
+      # non-heap headroom (metaspace, direct buffers, thread stacks).
+      PULSAR_MEM: "-Xms512m -Xmx1024m -XX:MaxDirectMemorySize=512m"
+    healthcheck:
+      test: ["CMD", "bin/pulsar-admin", "clusters", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 60
+      start_period: 60s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 3g
+        reservations:
+          memory: 1g
+
+  writer:
+    build:
+      context: .
+      args:
+        APP: writer
+    depends_on:
+      pulsar:
+        condition: service_healthy
+    ports:
+      - "8080:8080" # HTTP API
+      - "8181:8081" # metrics
+    volumes:
+      - ./.secrets/pulsar-keys:/run/secrets/pulsar-keys:ro
+      - ./.secrets/writer-tokens:/run/secrets/writer-tokens:ro
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      LOG_LEVEL: "${LOG_LEVEL:-info}"
+
       METRICS_ENABLED: "true"
       METRICS_PORT: "8081"
-
-      LOCAL: "true"
-
-      # tracing
-      TRACING_ENABLED: "false"
+      TRACING_ENABLED: "${TRACING_ENABLED:-false}"
       TRACING_SAMPLERATE: "1.0"
-      TRACING_SERVICE: "go-start"
+      TRACING_SERVICE: "pnp-writer"
       TRACING_VERSION: "0.0.1"
       OTEL_EXPORTER_OTLP_ENDPOINT: "http://lgtm:4317"
+      LOCAL: "true"
 
-      # grpc (otlp tracing)
-      GRPC_GO_LOG_VERBOSITY_LEVEL: 99
-      GRPC_GO_LOG_SEVERITY_LEVEL: info
+      PULSAR_SERVICE_URL: "pulsar://pulsar:6650"
+      PULSAR_TOPIC: "persistent://public/default/notifications"
+      PULSAR_ENCRYPTION_KEY_DIR: "/run/secrets/pulsar-keys"
+      PULSAR_ENCRYPTION_KEY_NAMES: "v1"
+
+      WRITER_HTTP_ADDR: ":8080"
+      WRITER_BEARER_TOKENS_FILE: "/run/secrets/writer-tokens"
+      WRITER_IDEMPOTENCY_WINDOW: "5m"
+    healthcheck:
+      test: ["CMD", "/healthcheck", "http://localhost:8080/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 256m
+        reservations:
+          memory: 64m
+
+  deliverer:
+    build:
+      context: .
+      args:
+        APP: deliverer
+    depends_on:
+      pulsar:
+        condition: service_healthy
+    ports:
+      - "8282:8081" # metrics / healthz
+    volumes:
+      - ./.secrets/pulsar-keys:/run/secrets/pulsar-keys:ro
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      LOG_LEVEL: "${LOG_LEVEL:-info}"
+
+      METRICS_ENABLED: "true"
+      METRICS_PORT: "8081"
+      TRACING_ENABLED: "${TRACING_ENABLED:-false}"
+      TRACING_SAMPLERATE: "1.0"
+      TRACING_SERVICE: "pnp-deliverer"
+      TRACING_VERSION: "0.0.1"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://lgtm:4317"
+      LOCAL: "true"
+
+      PULSAR_SERVICE_URL: "pulsar://pulsar:6650"
+      PULSAR_TOPIC: "persistent://public/default/notifications"
+      PULSAR_SUBSCRIPTION: "notifications-deliverer"
+      PULSAR_ENCRYPTION_KEY_DIR: "/run/secrets/pulsar-keys"
+
+      PROVIDER: "${PROVIDER:-sandbox}"
+      DELIVERER_CONCURRENCY: "4"
+      DELIVERER_RETRY_MAX_ATTEMPTS: "5"
+      DELIVERER_RETRY_INITIAL_BACKOFF: "500ms"
+      DELIVERER_RETRY_MAX_BACKOFF: "30s"
+      PUSHOVER_APP_TOKEN: "${PUSHOVER_APP_TOKEN:-}"
+      PUSHOVER_BASE_URL: "${PUSHOVER_BASE_URL:-https://api.pushover.net}"
+    healthcheck:
+      # Served by alpineworks.io/ootel on MetricsPort regardless of exporter type.
+      test: ["CMD", "/healthcheck", "http://localhost:8081/healthcheck"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 256m
+        reservations:
+          memory: 64m
 
   lgtm:
     image: grafana/otel-lgtm
     ports:
       - "3000:3000" # Grafana UI
-      - "4317:4317" # OTLP
-      - "4318:4318" # OTLPHTTP
+      - "4317:4317" # OTLP gRPC
+      - "4318:4318" # OTLP HTTP
     volumes:
       - ./docker/grafana/dashboards:/var/lib/grafana/dashboards
       - ./docker/grafana/dashboards.yaml:/otel-lgtm/grafana/conf/provisioning/dashboards/grafana-dashboards.yaml
+      - lgtm-data:/data
     environment:
       - GF_AUTH_ANONYMOUS_ENABLED=true
       - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
       - GF_AUTH_DISABLE_LOGIN_FORM=true
+    restart: unless-stopped
+
+  alloy:
+    image: grafana/alloy:v1.4.2
+    command:
+      - run
+      - --server.http.listen-addr=0.0.0.0:12345
+      - --stability.level=experimental
+      - /config.alloy
+    volumes:
+      - ./docker/alloy/config.alloy:/config.alloy:ro
+      # Docker socket is needed by Alloy's docker-discovery + loki.source.docker
+      # to tail container stdout/stderr without per-service wiring.
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    ports:
+      - "12345:12345" # Alloy UI / debug
+    depends_on:
+      lgtm:
+        condition: service_started
+    restart: unless-stopped
+
+volumes:
+  pulsar-data: {}
+  pulsar-conf: {}
+  lgtm-data: {}

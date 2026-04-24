@@ -1,0 +1,302 @@
+openapi: 3.0.3
+info:
+  title: Pulsar Notification Pipeline — Writer API
+  version: 0.1.0
+  description: |
+    HTTP API exposed by the writer binary of the pulsar-notifcation-pipeline.
+    This document is the authoritative contract (FR-018). Both the server
+    handler stubs (in `internal/writer/httpserver/`) and the public Go client
+    library (in `pkg/notificationclient/`) are generated from this file.
+
+    Response bodies are always JSON regardless of the request content type:
+      - 2xx responses use `application/json` and the {data, meta} envelope.
+      - Error responses use `application/problem+json` per RFC 9457.
+
+servers:
+  - url: http://localhost:8080
+    description: Local development
+
+security:
+  - bearerAuth: []
+
+paths:
+  /notifications:
+    post:
+      operationId: submitNotification
+      summary: Submit a notification for delivery.
+      description: |
+        Accepts a canonical Notification message in either protobuf or JSON
+        (proto3 canonical JSON mapping of the same message). On success, the
+        writer publishes the message to Pulsar and returns a {data, meta}
+        envelope containing the assigned notification_id.
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          description: |
+            Optional client-supplied idempotency key. Maximum 128 characters.
+            When repeated within the configured window with an identical payload,
+            the request is de-duplicated and the original notification_id is
+            returned.
+          required: false
+          schema:
+            type: string
+            maxLength: 128
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Notification'
+          application/x-protobuf:
+            schema:
+              type: string
+              format: binary
+              description: |
+                The canonical Notification message serialised as protobuf
+                (see proto/notification/v1/notification.proto). The writer
+                decodes this into the same typed struct as the JSON body.
+      responses:
+        '202':
+          description: Notification accepted and published to the substrate.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubmitNotificationSuccess'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
+        '409':
+          $ref: '#/components/responses/IdempotencyConflict'
+        '415':
+          $ref: '#/components/responses/UnsupportedContentType'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/SubstrateUnavailable'
+      security:
+        - bearerAuth: []
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: Static bearer tokens loaded from a file referenced by WRITER_BEARER_TOKENS_FILE.
+
+  schemas:
+    #
+    # Canonical message (mirrors proto/notification/v1/notification.proto via proto3 JSON).
+    # Server-assigned fields (notification_id, created_at, originating_service) are
+    # writeOnly:false/readOnly:true — clients do not supply them.
+    #
+    Notification:
+      type: object
+      required: [content, target]
+      properties:
+        notificationId:
+          type: string
+          format: uuid
+          readOnly: true
+          description: Server-assigned UUIDv7.
+        createdAt:
+          type: string
+          format: date-time
+          readOnly: true
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+        originatingService:
+          type: string
+          readOnly: true
+        idempotencyKey:
+          type: string
+          maxLength: 128
+          nullable: true
+        content:
+          $ref: '#/components/schemas/Content'
+        target:
+          $ref: '#/components/schemas/NotificationTarget'
+
+    Content:
+      type: object
+      required: [title, body]
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 250
+        body:
+          type: string
+          minLength: 1
+          maxLength: 1024
+        priority:
+          type: integer
+          minimum: -2
+          maximum: 2
+          default: 0
+        data:
+          type: object
+          additionalProperties:
+            type: string
+            maxLength: 512
+          maxProperties: 32
+
+    # Proto3 oneof `target` renders as a JSON object with exactly one of the arm names.
+    # Expressed via oneOf + discriminator so generators can produce a tagged union.
+    NotificationTarget:
+      type: object
+      description: Exactly one arm must be set. New providers = new arm.
+      oneOf:
+        - type: object
+          required: [pushover]
+          properties:
+            pushover:
+              $ref: '#/components/schemas/PushoverTarget'
+
+    PushoverTarget:
+      type: object
+      required: [userOrGroupKey]
+      properties:
+        userOrGroupKey:
+          type: string
+          minLength: 30
+          maxLength: 30
+          pattern: '^[A-Za-z0-9]+$'
+        deviceName:
+          type: string
+          maxLength: 25
+          pattern: '^[A-Za-z0-9_-]+$'
+          nullable: true
+        sound:
+          type: string
+          maxLength: 25
+          nullable: true
+        url:
+          type: string
+          format: uri
+          maxLength: 512
+          nullable: true
+        urlTitle:
+          type: string
+          maxLength: 100
+          nullable: true
+
+    #
+    # {data, meta} success envelope (FR-021)
+    #
+    SubmitNotificationSuccess:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: object
+          required: [notificationId, acceptedAt]
+          properties:
+            notificationId:
+              type: string
+              format: uuid
+            acceptedAt:
+              type: string
+              format: date-time
+        meta:
+          $ref: '#/components/schemas/Meta'
+
+    Meta:
+      type: object
+      required: [requestId]
+      properties:
+        requestId:
+          type: string
+          description: Server-generated ULID for request-scope correlation.
+
+    #
+    # RFC 9457 Problem Details (FR-022). `type` URIs come from the catalogue in research.md §8.
+    #
+    Problem:
+      type: object
+      required: [type, title, status, detail, instance, requestId]
+      properties:
+        type:
+          type: string
+          format: uri
+          description: Stable URI from the documented error catalogue.
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        instance:
+          type: string
+        requestId:
+          type: string
+          description: Extension member. Mirrors meta.requestId from successful responses.
+        errors:
+          type: array
+          description: Extension member. Populated for validation-failed problems.
+          items:
+            $ref: '#/components/schemas/FieldError'
+
+    FieldError:
+      type: object
+      required: [field, code]
+      properties:
+        field:
+          type: string
+        code:
+          type: string
+          enum:
+            - required
+            - too-long
+            - whitespace-only
+            - out-of-range
+            - malformed
+            - too-many-entries
+            - key-invalid
+            - value-too-long
+            - missing
+            - unknown-arm
+            - requires-url
+            - before-created-at
+        message:
+          type: string
+
+  responses:
+    ValidationFailed:
+      description: Request body failed canonical-schema validation.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    AuthenticationRequired:
+      description: Missing or invalid bearer token.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    IdempotencyConflict:
+      description: The idempotency key was seen with a divergent payload inside the window.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    UnsupportedContentType:
+      description: Content-Type is neither application/json nor application/x-protobuf.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Internal:
+      description: Unexpected server error.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    SubstrateUnavailable:
+      description: Pulsar is not currently accepting publishes; client should retry.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
