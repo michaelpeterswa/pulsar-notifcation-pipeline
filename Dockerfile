@@ -1,39 +1,33 @@
-# Multi-stage build for the pulsar-notifcation-pipeline.
-# Parameterised by the APP build-arg: writer | deliverer.
-#
-# Build a specific binary:
-#   docker build --build-arg APP=writer    -t pulsar-np-writer    .
-#   docker build --build-arg APP=deliverer -t pulsar-np-deliverer .
-#
-# Both final images also ship `/healthcheck` — a tiny static HTTP probe used
-# by docker-compose's healthcheck block (the distroless base has no shell).
+# ── Stage 1: build ──────────────────────────────────────────────────────────
+# Dependencies are vendored by CI (`go mod vendor`) before invoking the Docker
+# build, so the builder stage has no outbound network access requirements.
+FROM golang:1.25 AS builder
 
-# -=-=-=-=-=-=- Compile Image -=-=-=-=-=-=-
-FROM golang:1.25 AS stage-compile
+ARG TARGETARCH
 
-ARG APP=writer
-
-WORKDIR /src
+WORKDIR /app
 
 COPY go.mod go.sum ./
-RUN go mod download
-
+COPY vendor/ vendor/
 COPY . .
 
-# hadolint ignore=DL3062
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH:-amd64} \
-    go build -trimpath -ldflags="-s -w" \
-    -o /out/app ./cmd/${APP} && \
-    CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH:-amd64} \
-    go build -trimpath -ldflags="-s -w" \
-    -o /out/healthcheck ./cmd/healthcheck
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} \
+    go build -mod=vendor -trimpath -ldflags="-s -w" \
+    -o /out/writer    ./cmd/writer && \
+    CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} \
+    go build -mod=vendor -trimpath -ldflags="-s -w" \
+    -o /out/deliverer ./cmd/deliverer
 
-# -=-=-=-=- Final Distroless Image -=-=-=-=-
-
+# ── Stage 2: writer ─────────────────────────────────────────────────────────
 # hadolint ignore=DL3007
-FROM gcr.io/distroless/static-debian12:latest AS stage-final
+FROM gcr.io/distroless/static-debian12:latest AS writer
+COPY --from=builder /out/writer /app
+USER nonroot:nonroot
+ENTRYPOINT ["/app"]
 
-COPY --from=stage-compile /out/app /app
-COPY --from=stage-compile /out/healthcheck /healthcheck
+# ── Stage 3: deliverer ──────────────────────────────────────────────────────
+# hadolint ignore=DL3007
+FROM gcr.io/distroless/static-debian12:latest AS deliverer
+COPY --from=builder /out/deliverer /app
 USER nonroot:nonroot
 ENTRYPOINT ["/app"]

@@ -8,7 +8,7 @@ on: #  yamllint disable-line rule:truthy
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
+  IMAGE_BASE: ${{ github.repository }}
 
 jobs:
   build-and-push-image:
@@ -21,6 +21,14 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Vendor dependencies
+        run: go mod vendor
+
       - name: Log in to the Container registry
         uses: docker/login-action@v3
         with:
@@ -28,27 +36,42 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract metadata (tags, labels) for Docker
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-
       - name: Setup QEMU
         uses: docker/setup-qemu-action@v3
 
       - name: Setup Docker Buildx
-        id: buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build and Push to Container Registry
+      - name: Extract metadata for writer
+        id: meta-writer
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_BASE }}/writer
+
+      - name: Extract metadata for deliverer
+        id: meta-deliverer
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_BASE }}/deliverer
+
+      - name: Build and push writer
         uses: docker/build-push-action@v6
         with:
           push: true
           provenance: true
           file: Dockerfile
+          target: writer
           platforms: linux/amd64,linux/arm64
-          build-args: |
-            VERSION=${{ steps.meta.outputs.version }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          tags: ${{ steps.meta-writer.outputs.tags }}
+          labels: ${{ steps.meta-writer.outputs.labels }}
+
+      - name: Build and push deliverer
+        uses: docker/build-push-action@v6
+        with:
+          push: true
+          provenance: true
+          file: Dockerfile
+          target: deliverer
+          platforms: linux/amd64,linux/arm64
+          tags: ${{ steps.meta-deliverer.outputs.tags }}
+          labels: ${{ steps.meta-deliverer.outputs.labels }}

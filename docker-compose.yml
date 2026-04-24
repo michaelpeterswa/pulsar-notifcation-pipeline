@@ -41,8 +41,7 @@ services:
   writer:
     build:
       context: .
-      args:
-        APP: writer
+      target: writer
     depends_on:
       pulsar:
         condition: service_healthy
@@ -75,12 +74,6 @@ services:
       WRITER_HTTP_ADDR: ":8080"
       WRITER_BEARER_TOKENS_FILE: "/run/secrets/writer-tokens"
       WRITER_IDEMPOTENCY_WINDOW: "5m"
-    healthcheck:
-      test: ["CMD", "/healthcheck", "http://localhost:8080/healthz"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-      start_period: 10s
     restart: unless-stopped
     deploy:
       resources:
@@ -93,8 +86,7 @@ services:
   deliverer:
     build:
       context: .
-      args:
-        APP: deliverer
+      target: deliverer
     depends_on:
       pulsar:
         condition: service_healthy
@@ -129,13 +121,6 @@ services:
       DELIVERER_RETRY_MAX_BACKOFF: "30s"
       PUSHOVER_APP_TOKEN: "${PUSHOVER_APP_TOKEN:-}"
       PUSHOVER_BASE_URL: "${PUSHOVER_BASE_URL:-https://api.pushover.net}"
-    healthcheck:
-      # Served by alpineworks.io/ootel on MetricsPort regardless of exporter type.
-      test: ["CMD", "/healthcheck", "http://localhost:8081/healthcheck"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-      start_period: 10s
     restart: unless-stopped
     deploy:
       resources:
