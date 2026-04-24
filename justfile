@@ -80,6 +80,11 @@ funcoptslint:
 
 # --- build -----------------------------------------------------------------
 
+# Sync the vendor directory. Run this after any go.mod / go.sum change and
+# before building Docker images.
+vendor:
+    go mod vendor
+
 build: build-writer build-deliverer
 
 build-writer:
