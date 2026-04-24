@@ -134,10 +134,10 @@ jobs:
 
       - uses: taiki-e/install-action@just
 
-      - name: Install protoc
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y protobuf-compiler
+      - uses: arduino/setup-protoc@v3
+        with:
+          version: "33.2"
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Regenerate contracts
         run: just generate

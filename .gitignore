@@ -43,3 +43,9 @@ dist/
 # Coverage
 coverage.out
 coverage.html
+
+# Re-include funcoptslint testdata: *.test dirs are Go module roots, not binaries
+!tools/funcoptslint/testdata/src/example.test/
+!tools/funcoptslint/testdata/src/example.test/**
+!tools/funcoptslint/testdata/src/other.test/
+!tools/funcoptslint/testdata/src/other.test/**
